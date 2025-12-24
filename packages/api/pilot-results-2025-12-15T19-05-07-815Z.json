@@ -1,0 +1,56 @@
+[
+  {
+    "success": false,
+    "provider": "anthropic",
+    "role": "story_generation",
+    "error": "ANTHROPIC_API_KEY not configured"
+  },
+  {
+    "success": false,
+    "provider": "anthropic",
+    "role": "player",
+    "error": "ANTHROPIC_API_KEY not configured"
+  },
+  {
+    "success": false,
+    "provider": "anthropic",
+    "role": "critic",
+    "error": "ANTHROPIC_API_KEY not configured"
+  },
+  {
+    "success": false,
+    "provider": "openai",
+    "role": "story_generation",
+    "error": "OPENAI_API_KEY not configured"
+  },
+  {
+    "success": false,
+    "provider": "openai",
+    "role": "player",
+    "error": "OPENAI_API_KEY not configured"
+  },
+  {
+    "success": false,
+    "provider": "openai",
+    "role": "critic",
+    "error": "OPENAI_API_KEY not configured"
+  },
+  {
+    "success": false,
+    "provider": "google",
+    "role": "story_generation",
+    "error": "GOOGLE_API_KEY not configured"
+  },
+  {
+    "success": false,
+    "provider": "google",
+    "role": "player",
+    "error": "GOOGLE_API_KEY not configured"
+  },
+  {
+    "success": false,
+    "provider": "google",
+    "role": "critic",
+    "error": "GOOGLE_API_KEY not configured"
+  }
+]

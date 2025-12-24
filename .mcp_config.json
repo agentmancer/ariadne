@@ -1,0 +1,26 @@
+{
+  "mcpServers": {
+    "story-game": {
+      "command": "/home/john/story/main/venv/bin/python",
+      "args": [
+        "/home/john/story/main/src/servers/story_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/home/john/story/main"
+      },
+      "description": "Interactive story MCP server with agent playthrough capabilities"
+    },
+    "ariadne-platform": {
+      "command": "node",
+      "args": [
+        "/home/john/ariadne/node_modules/.bin/tsx",
+        "/home/john/ariadne/packages/api/src/mcp-server.ts"
+      ],
+      "env": {
+        "DATABASE_URL": "postgresql://ariadne:ariadne_password@localhost:5433/ariadne",
+        "NODE_ENV": "development"
+      },
+      "description": "Ariadne research platform MCP server for study design and management"
+    }
+  }
+}

@@ -1,0 +1,3 @@
+[submodule "vendor/twinejs"]
+	path = vendor/twinejs
+	url = https://github.com/my-symbiotic-ai/twinejs.git

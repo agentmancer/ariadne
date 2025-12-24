@@ -1,0 +1,110 @@
+[
+  {
+    "success": true,
+    "provider": "anthropic",
+    "role": "story_generation",
+    "model": "claude-opus-4-5-20251101",
+    "elapsed": "10.81s",
+    "tokens": {
+      "input": 191,
+      "output": 390
+    },
+    "response": "```json\n{\n  \"prose\": \"The museum's emergency lights cast long shadows across the marble floors as Maya stepped through the service entrance. Tom had left it propped open for her, just as he'd promised in his cryptic voicemail. The main gallery stretched before her, a cathedral of glass cases and ancient artifacts, but something was wrong. The air carried the sharp, metallic scent of fresh blood.\\n\\nShe found Tom slumped against the base of the jade dragon statue—the museum's centerpiece, a three-foot sculpture worth millions. His security uniform was dark with blood, but his chest still rose and fell in shallow breaths. His trembling hand pointed toward the east wing, and he managed a single whispered word: \\\"Basement.\\\"\\n\\nMaya's trained eye swept the scene. The display case beside Tom had been shattered, its contents missing. Muddy footprints led in two directions—some toward the east wing basement stairs, others toward the loading dock. In the distance, she heard the wail of approaching sirens. Backup was maybe three minutes out, but whoever did this might not wait that long.\",\n  \"choices\": [\n    {\"id\": 1, \"text\": \"Stay with Tom and apply pressure to his wound—he needs immediate help, and he might be able to tell you more about the attacker.\"},\n    {\"id\": 2, \"text\": \"Follow the footprints toward the basement—Tom pointed that direction for a reason, and the thief might still be trapped down there.\"},\n    {\"id\": 3, \"text\": \"Head for the loading dock—if someone's trying to escape with the stolen artifact, you might be able to cut them off before they disappear.\"}\n  ]\n}\n```"
+  },
+  {
+    "success": true,
+    "provider": "anthropic",
+    "role": "player",
+    "model": "claude-opus-4-5-20251101",
+    "elapsed": "4.33s",
+    "tokens": {
+      "input": 204,
+      "output": 67
+    },
+    "response": "Choice: 4\n\nReasoning: His body language is screaming guilt—that nervous glance at the emergency exit isn't random. In my experience, people unconsciously look toward their escape route or the scene of their transgression, and I need to press that pressure point before he has time to compose himself."
+  },
+  {
+    "success": true,
+    "provider": "anthropic",
+    "role": "critic",
+    "model": "claude-opus-4-5-20251101",
+    "elapsed": "8.97s",
+    "tokens": {
+      "input": 360,
+      "output": 272
+    },
+    "response": "```json\n{\n  \"ratings\": {\n    \"coherence\": 5,\n    \"engagement\": 4,\n    \"genre_fit\": 5,\n    \"choice_quality\": 4\n  },\n  \"suggestions\": [\n    \"Add a fourth choice that allows Maya to take a softer approach—perhaps building rapport with Tom or pretending to believe his innocence—to give players more strategic variety in interrogation style.\",\n    \"Include a subtle sensory detail or environmental clue in the narrative (a security monitor flickering, Tom glancing at something specific) that could reward observant players and deepen the investigative atmosphere.\",\n    \"Consider making Tom's nervousness slightly more ambiguous—he could be hiding something unrelated to the theft—to preserve mystery and make the player's choice feel more consequential rather than obvious.\"\n  ],\n  \"overall_assessment\": \"A solid, well-crafted mystery scene that establishes atmosphere, stakes, and character dynamics effectively. The writing is professional with good pacing, and the choices offer genuinely different investigative approaches (psychological pressure, negotiation, forensic examination). Minor improvements could add strategic depth and preserve more uncertainty about Tom's actual involvement to heighten tension.\"\n}\n```"
+  },
+  {
+    "success": true,
+    "provider": "openai",
+    "role": "story_generation",
+    "model": "gpt-5.2-2025-12-11",
+    "elapsed": "8.53s",
+    "tokens": {
+      "input": 182,
+      "output": 367
+    },
+    "response": "{\n  \"prose\": \"The Jade Dragon Museum’s main gallery feels wrong at night—too quiet, too polished, like the exhibits are holding their breath. Maya’s footsteps soften on the dark marble as she slips past the rope stanchions, her eyes adjusting to the low security lighting. Ahead, a glass display case sits slightly ajar, the seam not quite aligned. A faint chemical tang hangs in the air, sharp and clean, like solvent. Inside the case, the velvet stand is empty except for a pale rectangle where something once rested—dustless, recently disturbed.\\n\\nTom, the lone security guard on duty, stands near the control panel by the staff door, his flashlight angled down as if he’s afraid to illuminate the wrong thing. “I did my rounds,” he says quickly, voice tight. “The alarms didn’t trip.” Maya’s gaze tracks past him to the corner camera: its lens is pointed a few degrees off-center, not enough for a casual observer to notice, but enough to miss the display case entirely. On the floor beneath the pedestal, a thin strip of clear plastic clings to the grout line—like the backing from an adhesive seal—alongside a single dark fiber that doesn’t match the museum’s uniform carpeting.\",\n  \"choices\": [\n    {\n      \"id\": 1,\n      \"text\": \"Inspect the display case and pedestal for tool marks, residue, or hidden mechanisms.\"\n    },\n    {\n      \"id\": 2,\n      \"text\": \"Question Tom in detail about his rounds, keys, and who else had access after hours.\"\n    },\n    {\n      \"id\": 3,\n      \"text\": \"Check the security camera and control panel for tampering, logs, or disabled sensors.\"\n    }\n  ]\n}"
+  },
+  {
+    "success": true,
+    "provider": "openai",
+    "role": "player",
+    "model": "gpt-5.2-2025-12-11",
+    "elapsed": "1.93s",
+    "tokens": {
+      "input": 196,
+      "output": 53
+    },
+    "response": "Choice: 2  \nReasoning: The scratch on the case is fresh-looking and out of place—physical evidence won’t lie, even if the guard does. If someone tried to force it, the marks could tell me how and how recently."
+  },
+  {
+    "success": true,
+    "provider": "openai",
+    "role": "critic",
+    "model": "gpt-5.2-2025-12-11",
+    "elapsed": "5.70s",
+    "tokens": {
+      "input": 323,
+      "output": 266
+    },
+    "response": "{\n  \"ratings\": {\n    \"coherence\": 4,\n    \"engagement\": 4,\n    \"genre_fit\": 5,\n    \"choice_quality\": 4\n  },\n  \"suggestions\": [\n    \"Reduce the certainty of Tom’s guilt in the narration (e.g., frame it as Maya’s suspicion rather than near-confirmation) to preserve mystery and avoid prematurely collapsing the suspect pool.\",\n    \"Make the choices branch more clearly in tone and consequence: pressing him could risk shutting him down or prompting a lie, immunity could create later complications with Maya’s superiors, and examining the case could reveal a concrete clue that changes who Maya suspects next.\",\n    \"Add one or two specific sensory/details tied to the heist (a missing keycard clip on Tom’s belt, a faint smell of metal polish, a smear on the display glass) so the scene isn’t only interrogation-driven and gives the player more to deduce.\"\n  ],\n  \"overall_assessment\": \"A strong, classic interrogation beat with solid noir/mystery tone and a clear objective; the writing is tense and readable, and the choices are mostly distinct, but the narration leans a bit too hard into Tom’s apparent guilt and could benefit from sharper consequence-driven branching and more concrete forensic detail.\"\n}"
+  },
+  {
+    "success": true,
+    "provider": "google",
+    "role": "story_generation",
+    "model": "gemini-3-pro-preview",
+    "elapsed": "15.23s",
+    "tokens": {
+      "input": 181,
+      "output": 342
+    },
+    "response": "```json\n{\n  \"prose\": \"Maya slipped past the velvet ropes, her footsteps swallowed by the plush carpeting of the Main Gallery. The room felt like a mausoleum, lit only by the pale wash of moonlight filtering through the high dome, casting long, skeletal shadows from the samurai armor lining the walls. In the center of the room, the display case for the legendary Jade Dragon was not just dark—it was open. The heavy glass cube had been slid back with surgical precision, seemingly bypassing the pressure sensors entirely.\\n\\nStanding before the empty pedestal was Tom, the night guard. He wasn't patrolling; he was frozen, his back to Maya, trembling slightly. In his right hand, the beam of his flashlight danced erratically over the velvet cushion where the artifact should have been. As Maya moved closer, she noticed a crumpled piece of paper clutched in his other hand, and just then, the distinct, metallic click of a side door latching shut echoed from the far end of the hall.\",\n  \"choices\": [\n    {\n      \"id\": 1,\n      \"text\": \"Draw your weapon and command Tom to freeze, demanding to know where the artifact is.\"\n    },\n    {\n      \"id\": 2,\n      \"text\": \"Ignore the guard for now and sprint toward the sound of the latching side door to catch the intruder.\"\n    },\n    {\n      \"id\": 3,\n      \"text\": \"Remain in the shadows and observe Tom, trying to see what is written on the note before revealing yourself.\"\n    }\n  ]\n}\n```"
+  },
+  {
+    "success": true,
+    "provider": "google",
+    "role": "player",
+    "model": "gemini-3-pro-preview",
+    "elapsed": "6.96s",
+    "tokens": {
+      "input": 190,
+      "output": 55
+    },
+    "response": "Choice: 4\n\nReasoning: His body language is screaming \"flight risk,\" and if I don't address his fixation on that door immediately, he might try to bolt. I need to apply pressure and catch him off guard before he can concoct a lie."
+  },
+  {
+    "success": true,
+    "provider": "google",
+    "role": "critic",
+    "model": "gemini-3-pro-preview",
+    "elapsed": "14.76s",
+    "tokens": {
+      "input": 329,
+      "output": 233
+    },
+    "response": "```json\n{\n  \"ratings\": {\n    \"coherence\": 4,\n    \"engagement\": 4,\n    \"genre_fit\": 5,\n    \"choice_quality\": 3\n  },\n  \"suggestions\": [\n    \"Revise Choice 2 ('Offer immunity'): A detective granting full legal immunity on the spot breaks procedural realism and lowers the stakes too easily. Change this to 'Play Good Cop and suggest cooperation will help his case' or 'Ask if someone forced him to do it'.\",\n    \"Replace Choice 3 ('Examine display case'): The narrative focus is entirely on the interpersonal tension with Tom. Breaking away to look at physical evidence kills the conversational momentum. Replace with a dialogue choice that exploits the 'nervous twitch' mentioned in the text, such as 'Bluff that you have camera footage of him.'\"\n  ],\n  \"overall_assessment\": \"The narrative setup is strong and atmospheric, effectively establishing a classic noir tone. However, the choices need refinement; one is procedurally unrealistic, and another disrupts the flow of the interrogation.\"\n}\n```"
+  }
+]

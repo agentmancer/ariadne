@@ -1,0 +1,19 @@
+{
+  "name": "@ariadne/module-dynamic-story",
+  "version": "1.0.0",
+  "description": "Dynamic Story plugin for Ariadne Platform",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@ariadne/plugins": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

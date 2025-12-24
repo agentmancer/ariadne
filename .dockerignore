@@ -1,0 +1,18 @@
+node_modules
+dist
+build
+out
+.git
+.gitignore
+*.md
+.env
+.env.*
+*.log
+.DS_Store
+coverage
+.nyc_output
+.cache
+*.tmp
+
+# Keep .env.example
+!.env.example

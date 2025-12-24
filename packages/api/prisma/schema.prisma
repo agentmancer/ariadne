@@ -1,0 +1,1604 @@
+// Ariadne Platform v2.0 - Database Schema
+// PostgreSQL database with Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum CollaborativePhase {
+  AUTHOR
+  PLAY
+  REVIEW
+}
+
+enum CommentType {
+  FEEDBACK
+  SUGGESTION
+  QUESTION
+  PRAISE
+  CRITIQUE
+}
+
+enum ResearcherRole {
+  ADMIN
+  RESEARCHER
+}
+
+enum ShareRole {
+  VIEWER // Can view project and studies, but not modify
+  EDITOR // Can edit studies and participants, but not delete project
+  ADMIN // Full access except transferring ownership
+}
+
+enum AgentExecutionMode {
+  LOCAL // Browser-based with local Ollama
+  SERVER // Server-side queue workers
+}
+
+enum ParticipantType {
+  HUMAN // Real person using UI
+  SYNTHETIC // LLM-driven agent
+  HYBRID_AUTHOR // Human writes, synthetic reads
+  HYBRID_READER // Synthetic writes, human reads
+}
+
+enum AccountStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+// ============================================
+// RESEARCHER & AUTHENTICATION
+// ============================================
+
+model Researcher {
+  id           String @id @default(cuid())
+  email        String @unique
+  passwordHash String
+  name         String
+
+  // Role and status
+  role   ResearcherRole @default(RESEARCHER)
+  status AccountStatus  @default(ACTIVE)
+
+  // Account settings (JSON)
+  // Includes: agentExecutionMode, defaultLLMProvider, uiPreferences, etc.
+  settings Json @default("{}")
+
+  // Email verification
+  emailVerified   Boolean   @default(false)
+  emailVerifiedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  projects            Project[]
+  llmProviders        LLMProvider[]
+  agentDefinitions    AgentDefinition[]
+  passwordResetTokens PasswordResetToken[]
+
+  // Project sharing relations
+  sharedProjects       ProjectShare[] @relation("SharedProjects") // Projects shared with this researcher
+  projectSharesCreated ProjectShare[] @relation("ProjectSharesCreated") // Shares this researcher created
+
+  @@map("researchers")
+}
+
+// Password reset tokens
+model PasswordResetToken {
+  id           String     @id @default(cuid())
+  researcherId String
+  researcher   Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([researcherId])
+  @@map("password_reset_tokens")
+}
+
+// ============================================
+// PROJECT & STUDY ORGANIZATION
+// ============================================
+
+model Project {
+  id           String     @id @default(cuid())
+  name         String
+  description  String?
+  researcherId String
+  researcher   Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  studies Study[]
+  shares  ProjectShare[]
+
+  @@map("projects")
+}
+
+// ============================================
+// PROJECT SHARING
+// Allows researchers to share projects with other researchers
+// ============================================
+
+model ProjectShare {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // The researcher being granted access
+  sharedWithId String
+  sharedWith   Researcher @relation("SharedProjects", fields: [sharedWithId], references: [id], onDelete: Cascade)
+
+  // Permission level
+  role ShareRole @default(VIEWER)
+
+  // Who shared the project (for audit trail)
+  sharedById String
+  sharedBy   Researcher @relation("ProjectSharesCreated", fields: [sharedById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, sharedWithId]) // One share per researcher per project
+  @@index([sharedWithId])
+  @@index([projectId])
+  @@map("project_shares")
+}
+
+model Study {
+  id        String  @id @default(cuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  type        String  @default("SINGLE_PARTICIPANT") // SINGLE_PARTICIPANT, PAIRED_COLLABORATIVE, MULTI_ROUND, CUSTOM
+
+  // Study configuration (JSON as String)
+  config String @default("{}") // Flexible JSON for study-specific settings
+
+  // Participant recruitment
+  prolificStudyId String? // Prolific study ID if using Prolific
+  prolificEnabled Boolean @default(false)
+
+  // Timing
+  startDate DateTime?
+  endDate   DateTime?
+
+  status String @default("DRAFT") // DRAFT, ACTIVE, PAUSED, COMPLETED, ARCHIVED
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conditions        Condition[]
+  sessions          Session[]
+  participants      Participant[]
+  surveys           Survey[]
+  batchExecutions   BatchExecution[]
+  experimentDesigns ExperimentDesign[]
+  storyStudyConfig  StoryStudyConfig?
+
+  enrollmentConfig EnrollmentConfig?
+
+  // Prompt Version Control (RFC 003 Phase 2)
+  promptTemplates PromptTemplate[]
+  modelConfigs    ModelConfig[]
+
+  // Trials (RFC-002)
+  trials Trial[]
+
+  @@index([projectId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([projectId, status]) // For filtering project studies by status
+  @@map("studies")
+}
+
+// ============================================
+// ENROLLMENT CONFIGURATION
+// ============================================
+
+model EnrollmentConfig {
+  id      String @id @default(cuid())
+  studyId String @unique
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Public URL configuration
+  slug String @unique // e.g., "spring-2025-study" -> /enroll/spring-2025-study
+
+  // Status controls
+  enabled Boolean @default(false)
+
+  // Capacity limits
+  maxParticipants Int? // null = unlimited
+
+  // Timing windows
+  openAt  DateTime? // null = immediately when enabled
+  closeAt DateTime? // null = no end date
+
+  // Content (stored as Markdown, rendered as HTML)
+  welcomeContent      String? @db.Text // Landing page content
+  consentDocument     String? @db.Text // Consent document (Markdown)
+  consentVersion      String  @default("1.0") // Current version
+  instructionsContent String? @db.Text // Study instructions
+  completionContent   String? @db.Text // Thank you / next steps
+
+  // Form configuration
+  requireAvailability Boolean @default(true)
+  customFields        String  @default("[]") // JSON array of custom field definitions
+
+  // Email configuration
+  sendConfirmationEmail     Boolean @default(true)
+  confirmationEmailTemplate String? @db.Text // Markdown template with variables
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  consentVersions ConsentVersion[]
+
+  @@index([slug])
+  @@map("enrollment_configs")
+}
+
+model ConsentVersion {
+  id                 String           @id @default(cuid())
+  enrollmentConfigId String
+  enrollmentConfig   EnrollmentConfig @relation(fields: [enrollmentConfigId], references: [id], onDelete: Cascade)
+
+  version       String // e.g., "1.0", "1.1", "2.0"
+  content       String   @db.Text // Markdown content
+  effectiveDate DateTime @default(now())
+
+  createdAt DateTime @default(now())
+
+  @@unique([enrollmentConfigId, version])
+  @@index([enrollmentConfigId])
+  @@map("consent_versions")
+}
+
+// ============================================
+// EXPERIMENTAL CONDITIONS
+// ============================================
+
+model Condition {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  config      String  @default("{}") // Condition-specific settings (JSON as String)
+
+  // Story architecture configuration for parameterized experiments
+  // Stores StoryArchitectureConfig JSON for agent structure, debate patterns, state representation
+  architectureConfig String? // JSON: StoryArchitectureConfig from @ariadne/shared
+
+  participants Participant[]
+  trials       Trial[]
+
+  @@index([studyId])
+  @@map("conditions")
+}
+
+// ============================================
+// TRIALS (RFC-002: Parameter Sweep Experiments)
+// ============================================
+
+enum TrialStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+model Trial {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Optional: trials can belong to a condition or be study-wide parameter sweeps
+  conditionId String?
+  condition   Condition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
+
+  // Trial identification
+  sequence Int      // Trial number within condition (1, 2, 3...)
+  name     String?  // Optional human-readable name
+
+  // Parameter configuration
+  parameters String @default("{}") // JSON: The parameter set for this trial
+
+  // Parameter sweep definition (optional)
+  parameterKey   String? // Which parameter is being varied
+  parameterValue String? // Value as string for indexing
+
+  // Results aggregation
+  sessionCount Int @default(0)
+  successCount Int @default(0)
+  failureCount Int @default(0)
+
+  // Computed metrics (updated after sessions complete)
+  metrics String? // JSON: Aggregated metrics across sessions
+
+  // Batch execution link (RFC-002 Phase 4)
+  batchExecutionId String?
+  batchExecution   BatchExecution? @relation(fields: [batchExecutionId], references: [id], onDelete: SetNull)
+
+  status TrialStatus @default(PENDING)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+
+  sessions Session[]
+
+  @@unique([studyId, conditionId, sequence])
+  @@index([studyId])
+  @@index([conditionId])
+  @@index([parameterKey, parameterValue])
+  @@index([status])
+  @@index([batchExecutionId])
+  @@map("trials")
+}
+
+// ============================================
+// PARTICIPANTS
+// ============================================
+
+model Participant {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  conditionId String?
+  condition   Condition? @relation(fields: [conditionId], references: [id], onDelete: SetNull)
+
+  // Identification
+  uniqueId   String  @unique // Generated unique ID (e.g., P1, P2, etc.)
+  prolificId String? // Prolific participant ID
+  email      String? // Optional email for non-Prolific
+
+  // Actor type discriminator (PHASE 1: Synthetic Actors)
+  // Legacy field - use 'type' for new code
+  actorType String @default("HUMAN") // 'HUMAN' | 'SYNTHETIC'
+
+  // Participant type for mixed human/synthetic studies (PHASE 2)
+  type ParticipantType @default(HUMAN)
+
+  // Session progression for human participants (PHASE 2)
+  currentStage Int       @default(0) // SessionStage enum value
+  sessionStart DateTime? // When the participant started their session
+  checkedIn    DateTime? // When they checked in to the waiting room
+
+  // Application/enrollment data for human participants
+  application    Json? // Demographics, availability, consent info
+  consentVersion String? // Version of consent document agreed to
+
+  // Synthetic actor configuration (PHASE 1: Synthetic Actors)
+  role      String? // 'PLAYER' | 'STORYTELLER' | 'EDITOR' | 'CONSISTENCY_MANAGER' | 'EVALUATOR' | 'PARTNER' | 'CUSTOM'
+  llmConfig String? // JSON: LLM provider, model, temperature, etc. (for synthetic actors)
+  batchId   String? // Link to batch execution (for synthetic actors)
+  batch     BatchExecution? @relation(fields: [batchId], references: [id], onDelete: SetNull)
+
+  // Agent definition (PHASE 6.5: Agent Workbench)
+  agentDefinitionId String?
+  agentDefinition   AgentDefinition? @relation(fields: [agentDefinitionId], references: [id], onDelete: SetNull)
+
+  // Partner system for collaborative studies
+  partnerId String? // ID of paired participant
+  partner   Participant?  @relation("Partners", fields: [partnerId], references: [id])
+  partnerOf Participant[] @relation("Partners")
+
+  // Pairing metadata for tracking how/when partners were matched
+  pairingMetadata Json? // { pairedAt, matchedBy, overlapHours, humanRole }
+
+  // State tracking
+  state String @default("ENROLLED") // ENROLLED, SCHEDULED, CONFIRMED, CHECKED_IN, ACTIVE, COMPLETE, WITHDRAWN, EXCLUDED
+
+  // Metadata (JSON as String)
+  metadata String? @default("{}") // Demographics, custom fields
+
+  // Completion
+  completionCode String? // Generated code for Prolific completion
+  completedAt    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sessions                 SessionParticipant[]
+  events                   Event[]
+  surveyResponses          SurveyResponse[]
+  storyData                StoryData[]
+  toolUsageLogs            ToolUsageLog[]
+  storyPlaythroughSessions StoryPlaythroughSession[]
+  experimentResults        ExperimentResult[]
+
+  // Collaborative study relations
+  agentContext     AgentContext?
+  commentsAuthored Comment[]     @relation("CommentAuthor")
+  commentsReceived Comment[]     @relation("CommentTarget")
+
+  @@unique([studyId, prolificId]) // Prevent duplicate Prolific participants
+  @@index([studyId])
+  @@index([conditionId])
+  @@index([batchId])
+  @@index([agentDefinitionId])
+  @@index([studyId, state]) // For participant filtering
+  @@index([studyId, type]) // For filtering by participant type
+  // Note: uniqueId unique constraint is defined on the field itself (@unique)
+  @@map("participants")
+}
+
+// ============================================
+// SESSIONS (for scheduled/synchronous studies)
+// ============================================
+
+model Session {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Optional trial reference (RFC-002)
+  trialId String?
+  trial   Trial?  @relation(fields: [trialId], references: [id], onDelete: SetNull)
+
+  name           String
+  scheduledStart DateTime
+  scheduledEnd   DateTime?
+
+  actualStart DateTime?
+  actualEnd   DateTime?
+
+  maxParticipants Int @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants SessionParticipant[]
+
+  @@index([trialId])
+  @@map("sessions")
+}
+
+// Join table for many-to-many relationship
+model SessionParticipant {
+  sessionId String
+  session   Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  checkedInAt DateTime?
+  completedAt DateTime?
+
+  @@id([sessionId, participantId])
+  @@map("session_participants")
+}
+
+// ============================================
+// SURVEYS
+// ============================================
+
+model Survey {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  // Survey timing
+  timing String @default("PRE_STUDY") // PRE_STUDY, POST_TASK, EXIT, CUSTOM
+
+  // Questions stored as JSON string
+  questions String @default("[]") // Array of question objects with type, text, options, etc.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  responses SurveyResponse[]
+
+  @@map("surveys")
+}
+
+model SurveyResponse {
+  id       String @id @default(cuid())
+  surveyId String
+  survey   Survey @relation(fields: [surveyId], references: [id], onDelete: Cascade)
+
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Responses stored as JSON string
+  responses String @default("{}") // Map of question ID to response value
+
+  completedAt DateTime @default(now())
+
+  @@index([surveyId])
+  @@index([participantId])
+  @@map("survey_responses")
+}
+
+// ============================================
+// EVENT LOGGING
+// ============================================
+
+model Event {
+  id            String      @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Event type and context
+  type     String // navigate, edit, comment, submit, etc.
+  category String? // story, survey, biosignal, etc.
+
+  // Event data (JSON as String)
+  data String @default("{}") // Flexible JSON for event-specific data
+
+  // Temporal context
+  timestamp   DateTime @default(now())
+  sequenceNum Int? // Optional sequence number for ordering
+
+  // Spatial context (optional)
+  context String? // e.g., passage name, page URL, etc.
+
+  @@index([participantId, timestamp])
+  @@index([type])
+  @@map("events")
+}
+
+// ============================================
+// STORY DATA
+// ============================================
+
+model StoryData {
+  id            String      @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Story metadata
+  pluginType String // twine, ai-generator, ink, etc.
+  version    Int    @default(1)
+
+  // Upload status for presigned URL flow
+  status    String    @default("CONFIRMED") // PENDING | CONFIRMED
+  expiresAt DateTime? // For pending records, when the presigned URL expires
+
+  // S3 storage reference
+  s3Key    String // S3 key for story JSON file
+  s3Bucket String // S3 bucket name
+
+  // Snapshot metadata
+  name        String?
+  description String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([participantId, pluginType, version]) // Prevent duplicate versions
+  @@index([participantId])
+  @@index([status, expiresAt]) // For cleanup of expired pending records
+  @@map("story_data")
+}
+
+// ============================================
+// BIOSIGNAL DATA (metadata, actual data in S3)
+// ============================================
+
+model BiosignalData {
+  id            String @id @default(cuid())
+  participantId String
+
+  // Biosignal type
+  type     String // HEART_RATE, HEART_RATE_VARIABILITY, GALVANIC_SKIN_RESPONSE, EYE_TRACKING, FACIAL_ACTION_UNITS, CUSTOM
+  deviceId String? // Device identifier
+
+  // S3 storage reference
+  s3Key    String // S3 key for biosignal data file
+  s3Bucket String
+
+  // Temporal alignment
+  startTime  DateTime
+  endTime    DateTime?
+  sampleRate Float? // Hz
+
+  // Metadata (JSON as String)
+  metadata String? @default("{}") // Device-specific metadata
+
+  createdAt DateTime @default(now())
+
+  @@index([participantId])
+  @@map("biosignal_data")
+}
+
+// ============================================
+// COMMUNICATION LOGS
+// ============================================
+
+model CommunicationLog {
+  id            String  @id @default(cuid())
+  participantId String? // Optional - some emails might be to researcher
+
+  type      String // EMAIL_VERIFICATION, SCHEDULE_NOTIFICATION, REMINDER, COMPLETION_CERTIFICATE, CUSTOM
+  recipient String // Email address or identifier
+  subject   String?
+
+  status String // sent, failed, bounced, etc.
+
+  sentAt DateTime @default(now())
+
+  metadata String? @default("{}") // Additional data (JSON as String)
+
+  @@index([participantId])
+  @@map("communication_logs")
+}
+
+// ============================================
+// SYNTHETIC ACTORS & LLM INTEGRATION
+// ============================================
+
+// PHASE 1: Batch Execution Tracking
+model BatchExecution {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  type   String // 'TRAINING_DATA' | 'EVALUATION' | 'SIMULATION'
+  status String @default("QUEUED") // 'QUEUED' | 'RUNNING' | 'COMPLETE' | 'FAILED' | 'PAUSED'
+
+  // Configuration (JSON as String)
+  config String @default("{}") // Batch execution configuration
+
+  // Progress tracking
+  actorsCreated   Int @default(0)
+  actorsCompleted Int @default(0)
+
+  // Results
+  error      String? // Error message if failed
+  exportPath String? // S3 path to exported results
+
+  // Timing
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  participants Participant[]
+  trials       Trial[]
+
+  @@index([studyId])
+  @@index([status])
+  @@map("batch_executions")
+}
+
+// PHASE 1: LLM Provider Configuration
+model LLMProvider {
+  id           String     @id @default(cuid())
+  researcherId String
+  researcher   Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  name     String // User-friendly name (e.g., "OpenAI GPT-4")
+  provider String // 'openai' | 'anthropic' | 'custom'
+  type     String // 'API' | 'SERVICE'
+
+  // Configuration
+  apiKey   String? // Encrypted API key (for API providers)
+  endpoint String? // Custom endpoint URL (for SERVICE providers)
+  config   String? @default("{}") // Provider-specific settings (JSON)
+
+  active Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([researcherId, name])
+  @@index([researcherId])
+  @@map("llm_providers")
+}
+
+// PHASE 6.5: Agent Definitions (Tool System)
+model AgentDefinition {
+  id           String     @id @default(cuid())
+  researcherId String
+  researcher   Researcher @relation(fields: [researcherId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  // Role and LLM configuration
+  role      String // 'PLAYER' | 'EDITOR' | 'STORYTELLER' | etc.
+  llmConfig String @default("{}") // JSON: provider, model, temperature, etc.
+
+  // Tool configuration
+  enabledTools     String  @default("[]") // JSON array of tool IDs
+  toolUseMode      String  @default("AGENTIC") // 'AGENTIC' | 'SCRIPTED' | 'HYBRID'
+  agenticConfig    String? @default("{}") // JSON: for agentic mode settings
+  scriptedWorkflow String? // JSON: for scripted mode workflow
+
+  // Prompts
+  systemPrompt        String // System prompt for the agent
+  toolUseInstructions String? // Optional tool use instructions
+
+  // Sharing and metadata
+  isPublic Boolean @default(false)
+  tags     String  @default("[]") // JSON array of tags
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  participants Participant[]
+
+  @@index([researcherId])
+  @@map("agent_definitions")
+}
+
+// PHASE 6.5: Tool Usage Logging
+model ToolUsageLog {
+  id            String      @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  toolId String // Tool identifier (e.g., 'twine.create_passage')
+  params String @default("{}") // JSON: tool parameters
+  result String @default("{}") // JSON: tool result
+
+  success   Boolean
+  latencyMs Int // Execution time in milliseconds
+
+  timestamp DateTime @default(now())
+
+  @@index([participantId, timestamp])
+  @@index([toolId])
+  @@map("tool_usage_logs")
+}
+
+// PHASE 6.75: Experiment Design Framework
+model ExperimentDesign {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+
+  // Design configuration
+  variables        String  @default("[]") // JSON: ExperimentalVariable[]
+  designType       String  @default("FULL_FACTORIAL") // 'FULL_FACTORIAL' | 'PARTIAL_FACTORIAL' | 'CUSTOM'
+  customConditions String? // JSON: for custom designs
+
+  // Sample size
+  participantsPerCondition    Int @default(0)
+  syntheticActorsPerCondition Int @default(0)
+
+  // Dependent variables
+  dependentVariables String  @default("[]") // JSON: DependentVariable[]
+  analysisConfig     String? @default("{}") // JSON: analysis configuration
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  conditions        ExperimentalCondition[]
+  experimentResults ExperimentResult[]
+  experiments       Experiment[]
+
+  @@index([studyId])
+  @@map("experiment_designs")
+}
+
+// PHASE 6.75: Experimental Conditions (generated from design)
+model ExperimentalCondition {
+  id           String           @id @default(cuid())
+  experimentId String
+  experiment   ExperimentDesign @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+
+  name String
+
+  // Variable levels for this condition
+  variableLevels String @default("{}") // JSON: Record<variableId, levelId>
+  resolvedConfig String @default("{}") // JSON: resolved configuration
+
+  // Link to actual study condition (optional)
+  conditionId String?
+
+  // === PHASE 2c: Prompt Integration ===
+  // Optional links to prompt version control
+  promptVersionId String?
+  promptVersion   PromptVersion? @relation(fields: [promptVersionId], references: [id])
+  modelConfigId   String?
+  modelConfig     ModelConfig?   @relation(fields: [modelConfigId], references: [id])
+  promptVariantId String?
+  promptVariant   PromptVariant? @relation(fields: [promptVariantId], references: [id])
+
+  experimentResults ExperimentResult[]
+  experimentRuns    ExperimentRun[]
+
+  createdAt DateTime @default(now())
+
+  @@index([experimentId])
+  @@index([promptVersionId])
+  @@index([modelConfigId])
+  @@map("experimental_conditions")
+}
+
+// PHASE 6.75: Experiment Results
+model ExperimentResult {
+  id            String                @id @default(cuid())
+  experimentId  String
+  experiment    ExperimentDesign      @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  conditionId   String
+  condition     ExperimentalCondition @relation(fields: [conditionId], references: [id], onDelete: Cascade)
+  participantId String
+  participant   Participant           @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Computed metrics
+  metrics String @default("{}") // JSON: Record<variableId, value>
+
+  createdAt DateTime @default(now())
+
+  @@index([experimentId, conditionId])
+  @@index([participantId])
+  @@map("experiment_results")
+}
+
+// ============================================
+// EXPERIMENT EXECUTION (RFC 003: Evaluation Framework)
+// ============================================
+
+// Experiment execution instance - an actual run of an ExperimentDesign
+model Experiment {
+  id       String           @id @default(cuid())
+  designId String
+  design   ExperimentDesign @relation(fields: [designId], references: [id], onDelete: Cascade)
+
+  name        String
+  description String?
+  hypothesis  String?
+
+  // Execution status
+  status String @default("DRAFT") // DRAFT, QUEUED, RUNNING, COMPLETED, FAILED, CANCELLED
+
+  // Sample size (runs per condition)
+  runsPerCondition Int @default(1)
+
+  // Timing
+  queuedAt    DateTime?
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  // Error tracking
+  error String?
+
+  // Progress tracking (JSON: { conditionId: completedCount })
+  progress String @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  runs ExperimentRun[]
+
+  @@index([designId])
+  @@index([status])
+  @@map("experiments")
+}
+
+// Individual experiment run - execution of one condition
+model ExperimentRun {
+  id           String                @id @default(cuid())
+  experimentId String
+  experiment   Experiment            @relation(fields: [experimentId], references: [id], onDelete: Cascade)
+  conditionId  String
+  condition    ExperimentalCondition @relation(fields: [conditionId], references: [id], onDelete: Cascade)
+
+  // Execution status
+  status String @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED
+
+  // Execution context
+  startedAt   DateTime?
+  completedAt DateTime?
+  executorId  String? // Which worker/process ran this
+
+  // Raw outputs from the run (JSON)
+  outputs String @default("{}")
+
+  // Computed metrics (JSON: { metricName: value })
+  metrics String @default("{}")
+
+  // Error details
+  error String?
+
+  // Retry tracking
+  attemptNumber Int @default(1)
+  maxAttempts   Int @default(3)
+
+  createdAt DateTime @default(now())
+
+  @@index([experimentId])
+  @@index([status])
+  @@index([experimentId, conditionId])
+  @@map("experiment_runs")
+}
+
+// ============================================
+// PROMPT VERSION CONTROL (RFC 003 Phase 2)
+// Git-like versioning for LLM prompts
+// ============================================
+
+model PromptTemplate {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  name        String // e.g., "Story Generation Prompt"
+  description String?
+
+  // Default branch name (like git's main/master)
+  defaultBranch String @default("main")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  versions PromptVersion[]
+  branches PromptBranch[]
+  variants PromptVariant[]
+
+  @@index([studyId])
+  @@map("prompt_templates")
+}
+
+model PromptVersion {
+  id         String         @id @default(cuid())
+  templateId String
+  template   PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  // Version tracking
+  version  Int     // Auto-incrementing version number
+  parentId String? // Previous version (null for initial)
+  parent   PromptVersion?  @relation("VersionHistory", fields: [parentId], references: [id])
+  children PromptVersion[] @relation("VersionHistory")
+
+  // Content hash for deduplication (SHA-256)
+  contentHash String
+
+  // === MUST HAVE: Core Prompt Content ===
+  systemPrompt       String  @db.Text // System/instruction prompt
+  userPromptTemplate String  @db.Text // User message template with {{variables}}
+  templateVariables  String  @default("[]") // JSON: variable definitions [{name, type, description, required}]
+
+  // === NICE TO HAVE: Extended Content ===
+  fewShotExamples String  @default("[]") // JSON: Array of {input, output} examples
+  outputSchema    String? @db.Text // JSON Schema for structured output
+  toolDefinitions String  @default("[]") // JSON: Tool/function definitions
+
+  // Metadata
+  message   String? // Commit message describing changes
+  createdBy String? // Researcher ID who created this version
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  branches               PromptBranch[]
+  variants               PromptVariant[]
+  experimentalConditions ExperimentalCondition[]
+
+  @@unique([templateId, version])
+  @@unique([templateId, contentHash])
+  @@index([templateId])
+  @@index([parentId])
+  @@map("prompt_versions")
+}
+
+model PromptBranch {
+  id         String         @id @default(cuid())
+  templateId String
+  template   PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  name      String        // e.g., "main", "experiment-v2", "concise-variant"
+  versionId String        // Current version this branch points to
+  version   PromptVersion @relation(fields: [versionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([templateId, name])
+  @@index([templateId])
+  @@map("prompt_branches")
+}
+
+// ============================================
+// MODEL CONFIGURATION (RFC 003 Phase 2)
+// LLM provider and parameter settings
+// ============================================
+
+model ModelConfig {
+  id      String @id @default(cuid())
+  studyId String
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  name String // e.g., "GPT-4 Creative", "Claude Precise"
+
+  // Provider & Model
+  provider String // "openai", "anthropic", "google", "local"
+  model    String // "gpt-4-turbo", "claude-3-opus", etc.
+
+  // === MUST HAVE: Core Parameters ===
+  temperature Float @default(0.7)
+  maxTokens   Int   @default(1024)
+  topP        Float? // Nucleus sampling
+
+  // === NICE TO HAVE: Extended Parameters ===
+  topK             Int?    // Top-k sampling
+  presencePenalty  Float?  // Reduce repetition
+  frequencyPenalty Float?  // Reduce repetition
+  stopSequences    String  @default("[]") // JSON: array of stop strings
+  seed             Int?    // For reproducibility
+  responseFormat   String? // JSON: e.g., {"type": "json_object"}
+
+  // Cost tracking (USD per 1K tokens)
+  costPerInputToken  Float?
+  costPerOutputToken Float?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  variants               PromptVariant[]
+  experimentalConditions ExperimentalCondition[]
+
+  @@unique([studyId, name])
+  @@index([studyId])
+  @@map("model_configs")
+}
+
+// ============================================
+// PROMPT VARIANTS (RFC 003 Phase 2)
+// Model-specific adaptations of prompt versions
+// ============================================
+
+model PromptVariant {
+  id            String         @id @default(cuid())
+  templateId    String
+  template      PromptTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  versionId     String
+  version       PromptVersion  @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  modelConfigId String
+  modelConfig   ModelConfig    @relation(fields: [modelConfigId], references: [id], onDelete: Cascade)
+
+  // Optional overrides (null = use version's content)
+  systemPromptOverride       String? @db.Text
+  userPromptTemplateOverride String? @db.Text
+  fewShotExamplesOverride    String? // JSON
+
+  // Variant metadata
+  notes String? // Why this variant exists
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  experimentalConditions ExperimentalCondition[]
+
+  @@unique([versionId, modelConfigId])
+  @@index([templateId])
+  @@index([versionId])
+  @@index([modelConfigId])
+  @@map("prompt_variants")
+}
+
+// ============================================
+// STORY EVALUATION (Integration with Story SIG Project)
+// ============================================
+
+// Story-specific study configuration
+model StoryStudyConfig {
+  id      String @id @default(cuid())
+  studyId String @unique
+  study   Study  @relation(fields: [studyId], references: [id], onDelete: Cascade)
+
+  // Story API connection
+  storyApiUrl String // e.g., "http://localhost:5000"
+  storyId     String // e.g., "detective_interactive"
+
+  // Evaluation focus
+  evaluationMode String @default("ALL") // "PLAYABILITY" | "BELIEVABILITY" | "CONSEQUENCES" | "DRAMA" | "CHOICES" | "ALL"
+
+  // Integration settings
+  collectInternalMetrics Boolean @default(true) // Get metrics from Story's character_belief.py
+  recordWorldStates      Boolean @default(true) // Save world state snapshots
+  trackConsequences      Boolean @default(true) // Monitor consequence propagation
+  captureCharacterStates Boolean @default(true) // Store character goals/beliefs/emotions
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("story_study_configs")
+}
+
+// Playthrough session tracking
+model StoryPlaythroughSession {
+  id            String      @id @default(cuid())
+  participantId String
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  storySessionId String // Session ID from Story API
+
+  // Session metadata
+  startTime DateTime  @default(now())
+  endTime   DateTime?
+
+  // Completion tracking
+  completionStatus String @default("IN_PROGRESS") // "IN_PROGRESS" | "COMPLETED" | "ABANDONED" | "DEAD_END" | "ERROR"
+  scenesReached    Int    @default(0)
+  totalScenes      Int?
+
+  // Choice tracking (JSON: [{sceneNumber, choiceId, timestamp, hesitationMs}])
+  choiceHistory String @default("[]")
+
+  // Post-session evaluation
+  replayIntent        Boolean?
+  overallSatisfaction Float? // 1-5
+
+  // Error tracking
+  errorMessage String?
+
+  createdAt DateTime @default(now())
+
+  playabilityMetrics   StoryPlayabilityMetric[]
+  believabilityMetrics StoryBeliefabilityMetric[]
+  consequenceMetrics   StoryConsequenceMetric[]
+  dramaMetrics         StoryDramaMetric[]
+  choiceQualityMetrics StoryChoiceQualityMetric[]
+  internalMetrics      StoryInternalMetric[]
+
+  @@index([participantId])
+  @@map("story_playthrough_sessions")
+}
+
+// Playability metrics (Goal 1)
+model StoryPlayabilityMetric {
+  id        String                  @id @default(cuid())
+  sessionId String
+  session   StoryPlaythroughSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  sceneNumber Int
+  timestamp   DateTime @default(now())
+
+  // Engagement
+  engagementLevel  Float // 1-5
+  hesitationTimeMs Int? // Time spent before making choice
+
+  // Intent
+  wouldContinue  Boolean // Would continue playing?
+  continueReason String? // Why continue or abandon
+
+  // Frustration
+  frustrationLevel  Float? // 1-5
+  frustrationReason String?
+
+  // Confusion
+  confusionLevel  Float? // 1-5
+  confusionReason String?
+
+  @@index([sessionId, sceneNumber])
+  @@map("story_playability_metrics")
+}
+
+// Believability metrics (Goal 2)
+model StoryBeliefabilityMetric {
+  id        String                  @id @default(cuid())
+  sessionId String
+  session   StoryPlaythroughSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  sceneNumber Int
+  timestamp   DateTime @default(now())
+
+  // NPC/Character focus
+  characterName String? // Which NPC is being evaluated
+
+  // Believability
+  believabilityRating Float // 1-5: How believable was this character/action?
+
+  // Consistency
+  goalConsistent   Boolean? // Did action align with character goals?
+  beliefConsistent Boolean? // Did action align with character beliefs?
+  emotionAuthentic Boolean? // Was emotion appropriate for situation?
+
+  // Immersion
+  immersionBreak  Boolean // Did this break immersion?
+  immersionReason String? // Why it broke immersion
+
+  // Character state perception
+  perceivedGoals    String? // JSON: What does agent think character wants?
+  perceivedBeliefs  String? // JSON: What does agent think character believes?
+  perceivedEmotions String? // JSON: What emotions does agent detect?
+
+  @@index([sessionId, sceneNumber])
+  @@map("story_believability_metrics")
+}
+
+// Consequence tracking (Goal 3)
+model StoryConsequenceMetric {
+  id        String                  @id @default(cuid())
+  sessionId String
+  session   StoryPlaythroughSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  sceneNumber Int
+  choiceId    Int // Which choice was made
+  timestamp   DateTime @default(now())
+
+  // Expectations
+  expectedOutcome String? // What agent expected to happen
+  actualOutcome   String? // What actually happened
+
+  // Match assessment
+  expectationMatch String @default("UNKNOWN") // "EXCEEDED" | "MATCHED" | "FELL_SHORT" | "CONTRADICTED" | "UNKNOWN"
+
+  // Visibility
+  consequenceNoticed Boolean // Did agent notice the consequence?
+  visibilityRating   Float? // 1-5: How visible was the consequence?
+
+  // Meaningfulness
+  meaningfulnessRating Float? // 1-5: How meaningful was this consequence?
+  impactLevel          String? // "NONE" | "MINOR" | "MODERATE" | "MAJOR"
+
+  // Persistence tracking
+  referencedLater Boolean? // Did this consequence matter in future scenes?
+
+  @@index([sessionId, sceneNumber])
+  @@map("story_consequence_metrics")
+}
+
+// Drama/pacing metrics (Goal 4)
+model StoryDramaMetric {
+  id        String                  @id @default(cuid())
+  sessionId String
+  session   StoryPlaythroughSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  sceneNumber Int
+  timestamp   DateTime @default(now())
+
+  // Tension
+  tensionLevel  Float // 1-5: Current tension
+  tensionChange String? // "RISING" | "FALLING" | "STABLE"
+
+  // Engagement
+  engagementLevel Float // 1-5: How engaged
+
+  // Pacing
+  pacingRating     Float? // 1-5: Pacing quality
+  pacingAssessment String? // "TOO_SLOW" | "GOOD" | "TOO_FAST"
+
+  // Structure
+  buildingToward Boolean? // Does this feel like it's building toward something?
+  structuralRole String? // "EXPOSITION" | "RISING_ACTION" | "CLIMAX" | "FALLING_ACTION" | "RESOLUTION"
+
+  // Issues
+  draggyMoment Boolean? // Did this scene drag?
+  rushedMoment Boolean? // Did this scene feel rushed?
+
+  @@index([sessionId, sceneNumber])
+  @@map("story_drama_metrics")
+}
+
+// Choice quality metrics (Goal 5)
+model StoryChoiceQualityMetric {
+  id        String                  @id @default(cuid())
+  sessionId String
+  session   StoryPlaythroughSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  sceneNumber Int
+  timestamp   DateTime @default(now())
+
+  // Choices presented (JSON: array of choice objects)
+  choicesPresented String @default("[]")
+  choicesCount     Int    @default(0)
+
+  // Diversity
+  perceivedDiversity Float? // 1-5: Do choices feel different?
+  distinctChoices    Int? // How many feel truly distinct?
+
+  // Quality flags
+  fakeChoiceDetected  Boolean @default(false) // Do all paths lead to same place?
+  trapOptionDetected  Boolean @default(false) // Is one obviously bad?
+  railroadingDetected Boolean @default(false) // Is one clearly "correct"?
+
+  // Difficulty
+  choiceDifficulty String? // "OBVIOUS" | "MODERATE" | "AGONIZING"
+
+  // Meaningfulness
+  meaningfulnessRating Float? // 1-5: Do choices matter?
+
+  // Selection
+  chosenOptionId  Int? // Which choice was selected
+  choiceReasoning String? // Why this choice?
+  careLevel       Float? // 1-5: How much do you care about this choice?
+
+  @@index([sessionId, sceneNumber])
+  @@map("story_choice_quality_metrics")
+}
+
+// Internal metrics from Story's systems
+model StoryInternalMetric {
+  id        String                  @id @default(cuid())
+  sessionId String
+  session   StoryPlaythroughSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  sceneNumber Int
+  timestamp   DateTime @default(now())
+
+  // From character_belief.py validation
+  believabilityScore    Float? // 0-1 from Story's internal validation
+  capabilityCheck       Boolean? // Does character have skills/resources?
+  motivationAlignment   Float? // How aligned with character goals?
+  emotionalAuthenticity Float? // Emotion consistency score
+
+  // Character state snapshot (from SIG extraction)
+  characterGoals         String? @default("[]") // JSON: array of goal objects
+  characterBeliefs       String? @default("[]") // JSON: array of belief objects
+  characterEmotions      String? @default("[]") // JSON: array of emotion objects
+  characterRelationships String? @default("[]") // JSON: array of relationship objects
+  characterKnowledge     String? @default("[]") // JSON: array of knowledge objects
+
+  // World state snapshot (from world_state.py)
+  worldStateSnapshot String? @default("{}") // JSON: full world state
+  flagsActive        String? @default("[]") // JSON: active flags
+  evidenceDiscovered String? @default("[]") // JSON: evidence items
+
+  // Consequence tracking (from world_state.py)
+  consequencesApplied String? @default("[]") // JSON: array of WorldChange objects
+  informationFlows    String? @default("[]") // JSON: who-knows-what distribution
+  relationshipChanges String? @default("[]") // JSON: relationship deltas
+
+  // Drama manager metrics (from BasicDramaManager when implemented)
+  dramaTensionLevel  Float? // Drama manager's tension assessment
+  dramaPacingQuality String? // "TOO_FAST" | "GOOD" | "TOO_SLOW"
+  dramaGoalProgress  Boolean? // Is player making progress?
+
+  // Choice generation metadata (from choice_poetics_generator.py)
+  choiceDiversityScore Float? // Clustering-based diversity score
+  choicePoeticsUsed    String? @default("[]") // JSON: which dimensions used
+
+  @@index([sessionId, sceneNumber])
+  @@map("story_internal_metrics")
+}
+
+// ============================================
+// AGENT COLLABORATIVE CONTEXT
+// Persistent memory for multi-round collaborative studies
+// ============================================
+
+model AgentContext {
+  id            String      @id @default(cuid())
+  participantId String      @unique
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  // Current state
+  currentRound Int                @default(1)
+  currentPhase CollaborativePhase @default(AUTHOR)
+
+  // Memory: Own story drafts (JSON array of story references)
+  // Each entry: { round, storyDataId, summary, createdAt }
+  ownStoryDrafts Json @default("[]")
+
+  // Memory: Partner stories played (JSON array of play experiences)
+  // Each entry: { round, storyDataId, playNotes, choicesMade, observations, overallImpression }
+  partnerStoriesPlayed Json @default("[]")
+
+  // Memory: Feedback given to partner (JSON array)
+  // Each entry: { round, comments, strengths, improvements, overallAssessment }
+  feedbackGiven Json @default("[]")
+
+  // Memory: Feedback received from partner (JSON array)
+  // Note: This is denormalized for quick access; canonical data is in Comment table
+  // Each entry: { round, comments, strengths, improvements, overallAssessment }
+  feedbackReceived Json @default("[]")
+
+  // Cumulative learnings/themes (agent's evolving understanding)
+  // Each entry: { round, insight, category }
+  cumulativeLearnings Json @default("[]")
+
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Note: participantId index is not needed since @unique already creates one
+  @@map("agent_contexts")
+}
+
+// ============================================
+// COMMENTS / FEEDBACK
+// For storing feedback during collaborative studies
+// ============================================
+
+model Comment {
+  id String @id @default(cuid())
+
+  // Who wrote this comment
+  authorId String
+  author   Participant @relation("CommentAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  // Target: which participant's work is being commented on
+  targetParticipantId String
+  targetParticipant   Participant @relation("CommentTarget", fields: [targetParticipantId], references: [id], onDelete: Cascade)
+
+  // What they're commenting on (optional specific passage)
+  storyDataId String? // Reference to specific story version
+  passageId   String? // Which passage in the story
+
+  // The feedback itself
+  content     String
+  commentType CommentType @default(FEEDBACK)
+
+  // Context
+  round Int                @default(1) // Which collaborative round
+  phase CollaborativePhase @default(REVIEW)
+
+  // For threaded replies (optional)
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies  Comment[] @relation("CommentReplies")
+
+  // Status tracking
+  resolved         Boolean @default(false)
+  addressedInRound Int? // Which round the author addressed this
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([authorId])
+  @@index([targetParticipantId])
+  @@index([storyDataId])
+  @@index([round])
+  @@index([targetParticipantId, round, phase]) // Composite index for getCommentsReceived queries
+  @@map("comments")
+}
+
+// ============================================
+// HUMAN EVALUATION / RATING COLLECTION
+// For FDG 2026 study and similar evaluation tasks
+// ============================================
+
+// Evaluation Instrument Definition
+// Defines the rating scales and items for a study
+model EvaluationInstrument {
+  id String @id @default(cuid())
+
+  name        String // e.g., "FDG 2026 Combined Instrument"
+  description String?
+  version     String  @default("1.0")
+
+  // Instrument definition as JSON
+  // Structure: { scales: [{ id, name, description, minValue, maxValue, items: [{ id, text, dimension }] }] }
+  definition String @default("{}") // JSON: InstrumentDefinition
+
+  // Open-ended questions (separate from scales)
+  // Structure: [{ id, prompt }]
+  openQuestions String @default("[]") // JSON: OpenQuestion[]
+
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  passages EvaluationPassage[]
+
+  @@map("evaluation_instruments")
+}
+
+// Passages/Items to be Rated
+// Links narrative passages to studies/conditions for evaluation
+model EvaluationPassage {
+  id String @id @default(cuid())
+
+  instrumentId String
+  instrument   EvaluationInstrument @relation(fields: [instrumentId], references: [id], onDelete: Cascade)
+
+  studyId     String?
+  conditionId String? // Which experimental condition this passage belongs to
+
+  // Source tracking
+  sourceType  String  @default("STORY_PLAYTHROUGH") // "STORY_PLAYTHROUGH" | "IMPORT" | "MANUAL"
+  sourceId    String? // e.g., storyPlaythroughSessionId or import batch ID
+  sequenceNum Int     @default(0) // Order within source (e.g., action number)
+
+  // Content to rate
+  previousScene    String? // Context: what happened before
+  playerAction     String? // The action/choice made
+  consequenceScene String // The passage to evaluate
+  choicesOffered   String  @default("[]") // JSON: available choices after this passage
+
+  // Automated metrics (computed)
+  automatedMetrics String @default("{}") // JSON: repetition score, advancement rate, etc.
+
+  // Assignment tracking
+  targetRatings Int @default(3) // How many ratings this passage should get
+
+  createdAt DateTime @default(now())
+
+  ratings EvaluationRating[]
+
+  @@index([instrumentId])
+  @@index([studyId])
+  @@index([conditionId])
+  @@index([sourceType, sourceId])
+  @@map("evaluation_passages")
+}
+
+// Individual Rating Submission
+// Stores one rater's evaluation of one passage
+model EvaluationRating {
+  id String @id @default(cuid())
+
+  passageId String
+  passage   EvaluationPassage @relation(fields: [passageId], references: [id], onDelete: Cascade)
+
+  raterId String // Participant ID (the human rater)
+
+  // Scale ratings as JSON
+  // Structure: { scaleId: { itemId: value, ... }, ... }
+  // e.g., { "transportation": { "ts1": 5, "ts2": 6, ... }, "narrative_quality": { "nq1": 4, ... } }
+  scaleRatings String @default("{}") // JSON: Record<scaleId, Record<itemId, number>>
+
+  // Overall assessment (separate from scales)
+  // Structure: { oa1: 8, oa2: 6, oa3: 3 }
+  overallRatings String @default("{}") // JSON: Record<itemId, number>
+
+  // Open-ended responses
+  // Structure: { questionId: "response text", ... }
+  openResponses String @default("{}") // JSON: Record<questionId, string>
+
+  // Timing
+  timeSpentSeconds Int? // How long the rater spent on this passage
+
+  // Quality flags
+  isComplete       Boolean @default(false) // All required items answered
+  flaggedForReview Boolean @default(false) // Anomalous response pattern
+
+  createdAt DateTime @default(now())
+
+  @@unique([passageId, raterId]) // One rating per rater per passage
+  @@index([passageId])
+  @@index([raterId])
+  @@index([createdAt])
+  @@map("evaluation_ratings")
+}
+
+// Rater Profile (for human evaluators who aren't study participants)
+// Optional - for cases where raters are separate from study participants
+model EvaluationRater {
+  id String @id @default(cuid())
+
+  // External rater identification (not a study participant)
+  externalId String? @unique // e.g., Prolific ID for external raters
+  email      String?
+  name       String?
+
+  // Qualification
+  experienceLevel    String  @default("intermediate") // "novice" | "intermediate" | "expert"
+  qualificationNotes String?
+
+  // Calibration tracking
+  calibrationCompleted Boolean @default(false)
+  calibrationScore     Float? // Agreement with gold standard
+
+  // Stats
+  totalRatings     Int    @default(0)
+  avgTimePerRating Float? // Average seconds per rating
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("evaluation_raters")
+}

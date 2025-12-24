@@ -1,0 +1,27 @@
+{
+  "name": "ariadne-platform",
+  "version": "2.0.0",
+  "description": "Interactive storytelling research platform",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "pnpm --parallel -r dev",
+    "build": "pnpm -r build",
+    "build:twine": "cd vendor/twinejs && npm install && npm run build:web && cp -r dist/web ../../packages/web/public/twine",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint",
+    "type-check": "pnpm -r type-check",
+    "clean": "pnpm -r clean && rm -rf node_modules",
+    "postinstall": "git submodule update --init --recursive"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}

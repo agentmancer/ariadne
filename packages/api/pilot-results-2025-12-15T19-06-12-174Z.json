@@ -1,0 +1,74 @@
+[
+  {
+    "success": true,
+    "provider": "anthropic",
+    "role": "story_generation",
+    "model": "claude-opus-4-5-20251101",
+    "elapsed": "11.13s",
+    "tokens": {
+      "input": 191,
+      "output": 368
+    },
+    "response": "```json\n{\n  \"prose\": \"The museum's emergency lights cast long shadows across the polished marble floor as Maya stepped through the service entrance. Tom had let her in without question—they'd worked together on the Hartwell case last spring, and he knew better than to ask too many questions when she showed up unannounced. The main gallery stretched before her like a cathedral of antiquities, glass cases gleaming like dark mirrors in the dim light.\\n\\nSomething was wrong. Maya felt it before she saw it—that prickling sensation at the back of her neck that had saved her life more than once. The centerpiece of the Eastern Wing, a Tang dynasty jade horse valued at twelve million dollars, sat undisturbed in its case. But the laser grid that should have crisscrossed the floor was dark, and a single security camera hung limp from its mount, wires severed clean. Tom's radio crackled with static behind her.\\n\\n\\\"Detective,\\\" he whispered, his face pale in the emergency lighting. \\\"I did my rounds twenty minutes ago. Everything was fine.\\\" He pointed toward the restoration wing with a trembling hand. \\\"But I've been hearing sounds from back there. Like... like someone dragging something heavy across the floor.\\\"\",\n  \"choices\": [\n    {\"id\": 1, \"text\": \"Draw your weapon and investigate the restoration wing immediately\"},\n    {\"id\": 2, \"text\": \"Question Tom more thoroughly about what he saw during his rounds\"},\n    {\"id\": 3, \"text\": \"Examine the severed camera wires for clues about who did this\"}\n  ]\n}\n```"
+  },
+  {
+    "success": true,
+    "provider": "anthropic",
+    "role": "player",
+    "model": "claude-opus-4-5-20251101",
+    "elapsed": "4.28s",
+    "tokens": {
+      "input": 204,
+      "output": 77
+    },
+    "response": "Choice: 4\n\nReasoning: His body language is telling me everything his words aren't—that nervous glance at the emergency exit isn't random, it's a tell. In my experience, people look toward their escape route when they're hiding something, and I want to know what's got him so spooked before he has a chance to compose himself."
+  },
+  {
+    "success": true,
+    "provider": "anthropic",
+    "role": "critic",
+    "model": "claude-opus-4-5-20251101",
+    "elapsed": "8.79s",
+    "tokens": {
+      "input": 360,
+      "output": 281
+    },
+    "response": "```json\n{\n  \"ratings\": {\n    \"coherence\": 5,\n    \"engagement\": 4,\n    \"genre_fit\": 5,\n    \"choice_quality\": 4\n  },\n  \"suggestions\": [\n    \"Add a fourth choice that allows Maya to step back and observe Tom's behavior without direct confrontation—this would give players a more subtle investigative option and increase tactical variety.\",\n    \"Include a small sensory detail about Tom's specific nervous behavior (sweating, avoiding eye contact, fidgeting with keys) to deepen immersion and give players more information to base their choice on.\",\n    \"Consider making the immunity offer (choice 2) feel riskier by hinting that Maya doesn't actually have authority to grant it—this adds moral complexity and potential consequences.\"\n  ],\n  \"overall_assessment\": \"A solid, well-crafted scene that nails the noir detective atmosphere. The writing is tight, the stakes are clear, and the choices represent genuinely different investigative approaches (interrogation, negotiation, forensics). The proposal succeeds at creating tension and player agency. Minor improvements could add more nuance to both the scene details and the choice consequences, but this is ready for implementation with only light refinement.\"\n}\n```"
+  },
+  {
+    "success": false,
+    "provider": "openai",
+    "role": "story_generation",
+    "error": "OpenAI API error (400): {\n  \"error\": {\n    \"message\": \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"max_tokens\",\n    \"code\": \"unsupported_parameter\"\n  }\n}"
+  },
+  {
+    "success": false,
+    "provider": "openai",
+    "role": "player",
+    "error": "OpenAI API error (400): {\n  \"error\": {\n    \"message\": \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"max_tokens\",\n    \"code\": \"unsupported_parameter\"\n  }\n}"
+  },
+  {
+    "success": false,
+    "provider": "openai",
+    "role": "critic",
+    "error": "OpenAI API error (400): {\n  \"error\": {\n    \"message\": \"Unsupported parameter: 'max_tokens' is not supported with this model. Use 'max_completion_tokens' instead.\",\n    \"type\": \"invalid_request_error\",\n    \"param\": \"max_tokens\",\n    \"code\": \"unsupported_parameter\"\n  }\n}"
+  },
+  {
+    "success": false,
+    "provider": "google",
+    "role": "story_generation",
+    "error": "Google API error (404): {\n  \"error\": {\n    \"code\": 404,\n    \"message\": \"models/gemini-3-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.\",\n    \"status\": \"NOT_FOUND\"\n  }\n}\n"
+  },
+  {
+    "success": false,
+    "provider": "google",
+    "role": "player",
+    "error": "Google API error (404): {\n  \"error\": {\n    \"code\": 404,\n    \"message\": \"models/gemini-3-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.\",\n    \"status\": \"NOT_FOUND\"\n  }\n}\n"
+  },
+  {
+    "success": false,
+    "provider": "google",
+    "role": "critic",
+    "error": "Google API error (404): {\n  \"error\": {\n    \"code\": 404,\n    \"message\": \"models/gemini-3-pro is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.\",\n    \"status\": \"NOT_FOUND\"\n  }\n}\n"
+  }
+]

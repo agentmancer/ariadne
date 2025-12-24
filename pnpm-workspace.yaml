@@ -1,0 +1,19 @@
+packages:
+  - packages/*
+  - packages/modules/*
+
+onlyBuiltDependencies:
+  - /
+  - '@'
+  - a
+  - c
+  - e
+  - electron
+  - i
+  - l
+  - m
+  - n
+  - p
+  - r
+  - s
+  - t
